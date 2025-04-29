@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="config_path" default="$(find point_cloud_projection)/configs/config.yaml"/>
+
+  <node pkg="point_cloud_projection"
+        type="test_point_cloud_projection"
+        name="point_cloud_projection"
+        output="screen">
+    <param name="config_path" value="$(arg config_path)"/>
+  </node>
+</launch>

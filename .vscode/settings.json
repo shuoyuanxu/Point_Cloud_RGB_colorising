@@ -1,0 +1,12 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/shuoyuan/catkin_driver_ws/devel/lib/python3/dist-packages",
+        "/home/shuoyuan/catkin_slam_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/shuoyuan/catkin_driver_ws/devel/lib/python3/dist-packages",
+        "/home/shuoyuan/catkin_slam_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ]
+}
