@@ -47,7 +47,7 @@ public:
 
         fs["image_topic_right"]      >> image_topic_;
         fs["pointcloud_topic"] >> cloud_topic_;
-        fs["output_topic_right"]     >> output_topic_;
+        fs["output_topic"]     >> output_topic_;
 
         std::vector<double> intr; fs["intrinsics_right"] >> intr;
         if (intr.size() != 4) {
