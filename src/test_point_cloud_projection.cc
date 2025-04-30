@@ -45,11 +45,11 @@ public:
             return;
         }
 
-        fs["image_topic"]      >> image_topic_;
+        fs["image_topic_right"]      >> image_topic_;
         fs["pointcloud_topic"] >> cloud_topic_;
-        fs["output_topic"]     >> output_topic_;
+        fs["output_topic_right"]     >> output_topic_;
 
-        std::vector<double> intr; fs["intrinsics"] >> intr;
+        std::vector<double> intr; fs["intrinsics_right"] >> intr;
         if (intr.size() != 4) {
             ROS_ERROR("intrinsics must be [fx, fy, cx, cy]");
             ros::shutdown();
@@ -59,14 +59,14 @@ public:
         cv_K_.at<double>(0,0) = intr[0]; cv_K_.at<double>(1,1) = intr[1];
         cv_K_.at<double>(0,2) = intr[2]; cv_K_.at<double>(1,2) = intr[3];
 
-        std::vector<double> dist; fs["distortion_coeffs"] >> dist;
+        std::vector<double> dist; fs["distortion_coeffs_right"] >> dist;
         distCoeffs_ = cv::Mat(dist);
-        fs["distortion_model"] >> distortion_model_;
+        fs["distortion_model_right"] >> distortion_model_;
 
-        fs["resolution"] >> resolution_;
+        fs["resolution_right"] >> resolution_;
         width_ = int(resolution_[0]); height_ = int(resolution_[1]);
 
-        parseMat(fs, "T_lidar_camera", T_lidar_camera_);
+        parseMat(fs, "T_lidar_camera_right", T_lidar_camera_);
         fs.release();
 
         sub_cloud_.subscribe(nh_, cloud_topic_, 1);
@@ -128,7 +128,9 @@ private:
 
         // Colorize
         for (size_t i = 0; i < P2.size(); ++i) {
-            
+            if (P3[i].y >= 0.0)
+                continue;
+
             int u = int(std::round(P2[i].x));
             int v = int(std::round(P2[i].y));
             if (u < 0 || u >= width_ || v < 0 || v >= height_) continue;

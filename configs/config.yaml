@@ -2,21 +2,30 @@
 
 
 camera_model: pinhole
-distortion_coeffs: [-0.3314136312878232,0.09968942953404837,0.0013938106366061312,-0.0022472462619145045]
-distortion_model: equidistant
-intrinsics: [1105.7897803231563,1109.7060961957948,1080.0634208817119,721.8056600549693]
-resolution: [2048, 1536] # width x height
-pcl_path: /root/data2/direct_visual_lidar_calibration/calibration_bag_in_april_28/EMR_2025-04-28-14-37-27-right-camera-for-extrinsics/EMR_2025-04-28-14-37-27-right-camera-for-extrinsics.bag.ply
-image_topic: /right/image_raw/compressed
 pointcloud_topic: /ouster/points
 output_topic: /colorised_points
-colorized_point_cloud_output_path: /root/data2/direct_visual_lidar_calibration/calibration_bag_in_april_28/EMR_2025-04-28-14-37-27-right-camera-for-extrinsics
-T_lidar_camera: #rotation from IMU to camera R_ItoC, position of IMU in camera p_IinC
+
+# right camera
+distortion_coeffs_right: [-0.3314136312878232,0.09968942953404837,0.0013938106366061312,-0.0022472462619145045]
+distortion_model_right: equidistant
+intrinsics_right: [1105.7897803231563,1109.7060961957948,1080.0634208817119,721.8056600549693]
+resolution_right: [2048, 1536] 
+image_topic_right: /right/image_raw/compressed
+T_lidar_camera_right: 
   - [-0.999994, 0.0024486, 0.00258719, -0.145473]
   - [-0.00255011, 0.0150285, -0.999884, 0.239359]
   - [-0.0024872, -0.999884, -0.0150222, 0.0629833]
   - [0.0, 0.0, 0.0, 1.0]
 
+# left camera
+distortion_coeffs_left: [-0.3213240820173209,0.08551944456930434,-0.0009094399606886708,0.0026818343802164422]
+distortion_model_left: equidistant
+intrinsics_left: [1138.391327960023,1146.531942330645,1034.2249778088124,711.3833219239605]
+resolution_left: [2048, 1536]
+image_topic_left: /left/image_raw/compressed
+T_lidar_camera_left: 
+  - [0.998557, -0.00988827, -0.0527771, -0.274429]
+  - [-0.00526365, -0.0139785, 0.998516, -0.275993]
+  - [-0.0106113, -0.999853, -0.0134378, 0.0312496]
+  - [0.0, 0.0, 0.0, 1.0]
 
-    
- 
