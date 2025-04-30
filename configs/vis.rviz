@@ -75,7 +75,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Flat Squares
-      Topic: /point_cloud_projection
+      Topic: /colorised_points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -108,7 +108,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 8.066532135009766
+      Distance: 9.034516334533691
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

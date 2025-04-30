@@ -161,7 +161,7 @@ private:
 };
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "colorize_pointcloud_node");
+    ros::init(argc, argv, "colorize_pointcloud_node");PointCloudColorizer
     ros::NodeHandle nh("~");
     PointCloudColorizer node(nh);
     ros::spin();
