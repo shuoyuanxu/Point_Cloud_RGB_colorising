@@ -8,4 +8,9 @@
         output="screen">
     <param name="config_path" value="$(arg config_path)"/>
   </node>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find point_cloud_projection)/configs/vis.rviz">
+  <param name="output" value="screen"/>
+  </node>
+
 </launch>

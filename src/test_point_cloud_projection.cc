@@ -33,6 +33,7 @@ class PointCloudColorizer {
 public:
     typedef message_filters::sync_policies::ApproximateTime<
         sensor_msgs::PointCloud2,
+        sensor_msgs::CompressedImage,
         sensor_msgs::CompressedImage
     > SyncPolicy;
 
@@ -45,34 +46,43 @@ public:
             return;
         }
 
-        fs["image_topic_right"]      >> image_topic_;
+        fs["image_topic_right"] >> image_topic_right_;
+        fs["image_topic_left"] >> image_topic_left_;
         fs["pointcloud_topic"] >> cloud_topic_;
-        fs["output_topic"]     >> output_topic_;
+        fs["output_topic"] >> output_topic_;
 
-        std::vector<double> intr; fs["intrinsics_right"] >> intr;
-        if (intr.size() != 4) {
-            ROS_ERROR("intrinsics must be [fx, fy, cx, cy]");
-            ros::shutdown();
-            return;
-        }
-        cv_K_ = cv::Mat::eye(3, 3, CV_64F);
-        cv_K_.at<double>(0,0) = intr[0]; cv_K_.at<double>(1,1) = intr[1];
-        cv_K_.at<double>(0,2) = intr[2]; cv_K_.at<double>(1,2) = intr[3];
+        // Right camera parameters
+        std::vector<double> intr_right; fs["intrinsics_right"] >> intr_right;
+        cv_K_right_ = cv::Mat::eye(3, 3, CV_64F);
+        cv_K_right_.at<double>(0,0) = intr_right[0]; cv_K_right_.at<double>(1,1) = intr_right[1];
+        cv_K_right_.at<double>(0,2) = intr_right[2]; cv_K_right_.at<double>(1,2) = intr_right[3];
+        std::vector<double> dist_right; fs["distortion_coeffs_right"] >> dist_right;
+        distCoeffs_right_ = cv::Mat(dist_right);
+        fs["distortion_model_right"] >> distortion_model_right_;
+        fs["resolution_right"] >> resolution_right_;
+        width_right_ = int(resolution_right_[0]); height_right_ = int(resolution_right_[1]);
+        parseMat(fs, "T_lidar_camera_right", T_lidar_camera_right_);
 
-        std::vector<double> dist; fs["distortion_coeffs_right"] >> dist;
-        distCoeffs_ = cv::Mat(dist);
-        fs["distortion_model_right"] >> distortion_model_;
+        // Left camera parameters
+        std::vector<double> intr_left; fs["intrinsics_left"] >> intr_left;
+        cv_K_left_ = cv::Mat::eye(3, 3, CV_64F);
+        cv_K_left_.at<double>(0,0) = intr_left[0]; cv_K_left_.at<double>(1,1) = intr_left[1];
+        cv_K_left_.at<double>(0,2) = intr_left[2]; cv_K_left_.at<double>(1,2) = intr_left[3];
+        std::vector<double> dist_left; fs["distortion_coeffs_left"] >> dist_left;
+        distCoeffs_left_ = cv::Mat(dist_left);
+        fs["distortion_model_left"] >> distortion_model_left_;
+        fs["resolution_left"] >> resolution_left_;
+        width_left_ = int(resolution_left_[0]); height_left_ = int(resolution_left_[1]);
+        parseMat(fs, "T_lidar_camera_left", T_lidar_camera_left_);
 
-        fs["resolution_right"] >> resolution_;
-        width_ = int(resolution_[0]); height_ = int(resolution_[1]);
-
-        parseMat(fs, "T_lidar_camera_right", T_lidar_camera_);
         fs.release();
 
         sub_cloud_.subscribe(nh_, cloud_topic_, 1);
-        sub_img_.subscribe(nh_, image_topic_, 1);
-        sync_.reset(new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(10), sub_cloud_, sub_img_));
-        sync_->registerCallback(boost::bind(&PointCloudColorizer::callback, this, _1, _2));
+        sub_img_right_.subscribe(nh_, image_topic_right_, 1);
+        sub_img_left_.subscribe(nh_, image_topic_left_, 1);
+
+        sync_.reset(new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(10), sub_cloud_, sub_img_right_, sub_img_left_));
+        sync_->registerCallback(boost::bind(&PointCloudColorizer::callback, this, _1, _2, _3));
 
         pub_ = nh_.advertise<sensor_msgs::PointCloud2>(output_topic_, 1);
         ROS_INFO("Publishing colorized cloud on %s", output_topic_.c_str());
@@ -81,9 +91,9 @@ public:
 private:
     void callback(
         const sensor_msgs::PointCloud2ConstPtr& cloud_msg,
-        const sensor_msgs::CompressedImageConstPtr& img_msg
+        const sensor_msgs::CompressedImageConstPtr& img_right_msg,
+        const sensor_msgs::CompressedImageConstPtr& img_left_msg
     ) {
-        // Convert cloud to PCL XYZ
         pcl::PointCloud<pcl::PointXYZ>::Ptr in(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::fromROSMsg(*cloud_msg, *in);
         auto out = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
@@ -91,55 +101,16 @@ private:
         out->is_dense = false;
         out->height = 1;
 
-        // Decode compressed image
-        cv::Mat img;
-        try {
-            img = cv::imdecode(cv::Mat(img_msg->data), cv::IMREAD_COLOR);
-            if (img.empty()) {
-                ROS_ERROR("Failed to decode compressed image");
-                return;
-            }
-        } catch (const cv::Exception& e) {
-            ROS_ERROR("cv::imdecode exception: %s", e.what());
-            return;
-        }
+        cv::Mat img_right = cv::imdecode(cv::Mat(img_right_msg->data), cv::IMREAD_COLOR);
+        cv::Mat img_left = cv::imdecode(cv::Mat(img_left_msg->data), cv::IMREAD_COLOR);
 
-        // 1) Build P3 out of the *raw* LiDAR points
         std::vector<cv::Point3f> P3;
-        P3.reserve(in->size());
-        for (auto& p : in->points) {
-        P3.emplace_back(p.x, p.y, p.z);
-        }
+        for (auto& p : in->points) P3.emplace_back(p.x, p.y, p.z);
 
-        // 2) Compute rvec/tvec from T_lidar_camera (no inverse here!)
-        Eigen::Matrix3d R_e = T_lidar_camera_.block<3,3>(0,0);
-        Eigen::Vector3d t_e = T_lidar_camera_.block<3,1>(0,3);
-        cv::Mat R_cv, rvec, tvec(3,1,CV_64F);
-        cv::eigen2cv(R_e, R_cv);
-        cv::Rodrigues(R_cv, rvec);
-        for (int i = 0; i < 3; ++i) tvec.at<double>(i,0) = t_e(i);
+        // Colorize from both cameras
+        colorize(P3, img_right, T_lidar_camera_right_, cv_K_right_, distCoeffs_right_, distortion_model_right_, width_right_, height_right_, true, out);
+        colorize(P3, img_left, T_lidar_camera_left_, cv_K_left_, distCoeffs_left_, distortion_model_left_, width_left_, height_left_, false, out);
 
-        // 3) Project—all in one go
-        std::vector<cv::Point2f> P2;
-        if (distortion_model_ == "equidistant")
-            cv::fisheye::projectPoints(P3, P2, rvec, tvec, cv_K_, distCoeffs_);
-        else
-            cv::projectPoints   (P3, P2, rvec, tvec, cv_K_, distCoeffs_);
-
-        // Colorize
-        for (size_t i = 0; i < P2.size(); ++i) {
-            if (P3[i].y >= 0.0)
-                continue;
-
-            int u = int(std::round(P2[i].x));
-            int v = int(std::round(P2[i].y));
-            if (u < 0 || u >= width_ || v < 0 || v >= height_) continue;
-            cv::Vec3b c = img.at<cv::Vec3b>(v, u);
-            pcl::PointXYZRGB pt;
-            pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
-            pt.r = c[2]; pt.g = c[1]; pt.b = c[0];
-            out->points.push_back(pt);
-        }
         out->width = out->points.size();
 
         sensor_msgs::PointCloud2 out_msg;
@@ -148,14 +119,44 @@ private:
         pub_.publish(out_msg);
     }
 
+    void colorize(const std::vector<cv::Point3f>& P3, const cv::Mat& img, const Eigen::Matrix4d& T,
+                  const cv::Mat& K, const cv::Mat& dist, const std::string& distortion_model,
+                  int width, int height, bool is_right, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& out) {
+
+        Eigen::Matrix3d R_e = T.block<3,3>(0,0);
+        Eigen::Vector3d t_e = T.block<3,1>(0,3);
+        cv::Mat R_cv, rvec, tvec(3,1,CV_64F);
+        cv::eigen2cv(R_e, R_cv); cv::Rodrigues(R_cv, rvec);
+        for (int i = 0; i < 3; ++i) tvec.at<double>(i,0) = t_e(i);
+
+        std::vector<cv::Point2f> P2;
+        if (distortion_model == "equidistant")
+            cv::fisheye::projectPoints(P3, P2, rvec, tvec, K, dist);
+        else
+            cv::projectPoints(P3, P2, rvec, tvec, K, dist);
+
+        for (size_t i = 0; i < P2.size(); ++i) {
+            if ((is_right && P3[i].y <= 0.0) || (!is_right && P3[i].y >= 0.0)) {
+                int u = std::round(P2[i].x), v = std::round(P2[i].y);
+                if (u < 0 || u >= width || v < 0 || v >= height) continue;
+                cv::Vec3b c = img.at<cv::Vec3b>(v, u);
+                pcl::PointXYZRGB pt;
+                pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
+                pt.r = c[2]; pt.g = c[1]; pt.b = c[0];
+                out->points.push_back(pt);
+            }
+        }
+    }
+
     ros::NodeHandle nh_;
-    std::string config_path_, image_topic_, cloud_topic_, output_topic_, distortion_model_;
-    Eigen::Matrix4d T_lidar_camera_;
-    cv::Mat cv_K_, distCoeffs_;
-    std::vector<double> resolution_;
-    int width_, height_;
+    std::string config_path_, cloud_topic_, output_topic_, image_topic_right_, image_topic_left_;
+    cv::Mat cv_K_right_, cv_K_left_, distCoeffs_right_, distCoeffs_left_;
+    Eigen::Matrix4d T_lidar_camera_right_, T_lidar_camera_left_;
+    std::string distortion_model_right_, distortion_model_left_;
+    std::vector<double> resolution_right_, resolution_left_;
+    int width_right_, height_right_, width_left_, height_left_;
     message_filters::Subscriber<sensor_msgs::PointCloud2> sub_cloud_;
-    message_filters::Subscriber<sensor_msgs::CompressedImage> sub_img_;
+    message_filters::Subscriber<sensor_msgs::CompressedImage> sub_img_right_, sub_img_left_;
     std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
     ros::Publisher pub_;
 };
