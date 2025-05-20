@@ -119,23 +119,26 @@ private:
         // Project points
         std::vector<cv::Point2f> P2;
         if (distortion_model == "equidistant")
-        cv::fisheye::projectPoints(P3, P2, rvec, tvec, K, dist);
+            cv::fisheye::projectPoints(P3, P2, rvec, tvec, K, dist);
         else
-        cv::projectPoints(P3, P2, rvec, tvec, K, dist);
+            cv::projectPoints(P3, P2, rvec, tvec, K, dist);
 
         for (size_t i = 0; i < P2.size(); ++i) {
-        int u = static_cast<int>(std::round(P2[i].x));
-        int v = static_cast<int>(std::round(P2[i].y));
-        // if (mirror_u) u = width - 1 - u;
-        if (u < 0 || u >= width || v < 0 || v >= height) continue;
+            // Transform P3[i] from LiDAR → Camera using T
+            Eigen::Vector4d pt_lidar(P3[i].x, P3[i].y, P3[i].z, 1.0);
+            Eigen::Vector4d pt_cam = T * pt_lidar;
 
-        if ((is_right && P3[i].y <= 0.0) || (!is_right && P3[i].y >= 0.0)) {
+            // Check if point is in front of the camera (Z > 0)
+            if (pt_cam.z() <= 0) continue;
+
+            int u = static_cast<int>(std::round(P2[i].x));
+            int v = static_cast<int>(std::round(P2[i].y));
+            if (u < 0 || u >= width || v < 0 || v >= height) continue;
             cv::Vec3b c = img.at<cv::Vec3b>(v, u);
             pcl::PointXYZRGB pt;
             pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
             pt.r = c[2]; pt.g = c[1]; pt.b = c[0];
             out->points.push_back(pt);
-        }
         }
     }
 
