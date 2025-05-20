@@ -142,7 +142,6 @@ private:
         }
     }
 
-
     ros::NodeHandle nh_;
     std::string config_path_, cloud_topic_, output_topic_, image_topic_right_, image_topic_left_, distortion_model_right_, distortion_model_left_;
     Eigen::Matrix4d T_lidar_camera_right_, T_lidar_camera_left_;
