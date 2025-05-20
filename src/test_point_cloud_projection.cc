@@ -105,7 +105,7 @@ private:
         int width, int height, bool is_right, bool mirror_u,
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr& out) {
 
-        // Invert the transform to get T_lidar_camera
+        // Invert the transform to get T lidar to camera
         Eigen::Matrix4d T = T_camera_lidar.inverse();
 
         // Extract rotation and translation
