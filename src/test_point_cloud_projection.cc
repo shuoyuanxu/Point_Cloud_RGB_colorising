@@ -100,36 +100,45 @@ private:
         pub_.publish(out_msg);
     }
 
-    void colorize(const std::vector<cv::Point3f>& P3, const cv::Mat& img, const Eigen::Matrix4d& T,
-                    const cv::Mat& K, const cv::Mat& dist, const std::string& distortion_model,
-                    int width, int height, bool is_right, bool mirror_u,
-                    pcl::PointCloud<pcl::PointXYZRGB>::Ptr& out) {
+    void colorize(const std::vector<cv::Point3f>& P3, const cv::Mat& img, const Eigen::Matrix4d& T_camera_lidar,
+        const cv::Mat& K, const cv::Mat& dist, const std::string& distortion_model,
+        int width, int height, bool is_right, bool mirror_u,
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr& out) {
+
+        // Invert the transform to get T_lidar_camera
+        Eigen::Matrix4d T = T_camera_lidar.inverse();
+
+        // Extract rotation and translation
         Eigen::Matrix3d R_e = T.block<3,3>(0,0);
         Eigen::Vector3d t_e = T.block<3,1>(0,3);
         cv::Mat R_cv, rvec, tvec(3,1,CV_64F);
-        cv::eigen2cv(R_e, R_cv); cv::Rodrigues(R_cv, rvec);
+        cv::eigen2cv(R_e, R_cv);
+        cv::Rodrigues(R_cv, rvec);
         for (int i = 0; i < 3; ++i) tvec.at<double>(i,0) = t_e(i);
 
+        // Project points
         std::vector<cv::Point2f> P2;
         if (distortion_model == "equidistant")
-            cv::fisheye::projectPoints(P3, P2, rvec, tvec, K, dist);
+        cv::fisheye::projectPoints(P3, P2, rvec, tvec, K, dist);
         else
-            cv::projectPoints(P3, P2, rvec, tvec, K, dist);
+        cv::projectPoints(P3, P2, rvec, tvec, K, dist);
 
         for (size_t i = 0; i < P2.size(); ++i) {
-            if ((is_right && P3[i].y <= 0.0) || (!is_right && P3[i].y >= 0.0)) {
-                int u = int(std::round(P2[i].x));
-                if (mirror_u) u = width - 1 - u;
-                int v = int(std::round(P2[i].y));
-                if (u < 0 || u >= width || v < 0 || v >= height) continue;
-                cv::Vec3b c = img.at<cv::Vec3b>(v, u);
-                pcl::PointXYZRGB pt;
-                pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
-                pt.r = c[2]; pt.g = c[1]; pt.b = c[0];
-                out->points.push_back(pt);
-            }
+        int u = static_cast<int>(std::round(P2[i].x));
+        int v = static_cast<int>(std::round(P2[i].y));
+        // if (mirror_u) u = width - 1 - u;
+        if (u < 0 || u >= width || v < 0 || v >= height) continue;
+
+        if ((is_right && P3[i].y <= 0.0) || (!is_right && P3[i].y >= 0.0)) {
+            cv::Vec3b c = img.at<cv::Vec3b>(v, u);
+            pcl::PointXYZRGB pt;
+            pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
+            pt.r = c[2]; pt.g = c[1]; pt.b = c[0];
+            out->points.push_back(pt);
+        }
         }
     }
+
 
     ros::NodeHandle nh_;
     std::string config_path_, cloud_topic_, output_topic_, image_topic_right_, image_topic_left_, distortion_model_right_, distortion_model_left_;
