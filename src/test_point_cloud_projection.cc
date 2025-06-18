@@ -11,6 +11,18 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 
+
+struct PointXYZRGBRing {
+    PCL_ADD_POINT4D;                  // quad-word XYZ
+    float rgb;
+    std::uint16_t ring;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW  // ensure proper alignment
+} EIGEN_ALIGN16;
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(PointXYZRGBRing,
+                                  (float, x, x)(float, y, y)(float, z, z)
+                                  (float, rgb, rgb)(std::uint16_t, ring, ring))
+
 // Parse a 4x4 matrix from YAML (nested 4x4 or flat sequence)
 void parseMat(const cv::FileStorage& fs, const std::string& name, Eigen::Matrix4d& M) {
     cv::FileNode node = fs[name];
@@ -80,19 +92,22 @@ private:
                     const sensor_msgs::CompressedImageConstPtr& img_right_msg,
                     const sensor_msgs::CompressedImageConstPtr& img_left_msg) {
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr in(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<PointXYZRGBRing>::Ptr in(new pcl::PointCloud<PointXYZRGBRing>);
         pcl::fromROSMsg(*cloud_msg, *in);
-        auto out = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+        auto out = boost::make_shared<pcl::PointCloud<PointXYZRGBRing>>();                        
         out->header.frame_id = cloud_msg->header.frame_id;
         out->is_dense = false;
         out->height = 1;
 
         cv::Mat img_right = cv::imdecode(cv::Mat(img_right_msg->data), cv::IMREAD_COLOR);
         cv::Mat img_left = cv::imdecode(cv::Mat(img_left_msg->data), cv::IMREAD_COLOR);
-        std::vector<cv::Point3f> P3; for (auto& p : in->points) P3.emplace_back(p.x, p.y, p.z);
-
-        colorize(P3, img_right, T_lidar_camera_right_, cv_K_right_, distCoeffs_right_, distortion_model_right_, width_right_, height_right_, true, false, out);
-        colorize(P3, img_left, T_lidar_camera_left_, cv_K_left_, distCoeffs_left_, distortion_model_left_, width_left_, height_left_, false, true, out);
+        std::vector<cv::Point3f> P3; 
+        for (auto& p : in->points) P3.emplace_back(p.x, p.y, p.z);
+        
+        colorize(P3, img_right, T_lidar_camera_right_, cv_K_right_, distCoeffs_right_, distortion_model_right_,
+            width_right_, height_right_, true, false, out, in);
+        colorize(P3, img_left, T_lidar_camera_left_, cv_K_left_, distCoeffs_left_, distortion_model_left_,
+            width_left_, height_left_, false, true, out, in);
 
         out->width = out->points.size();
         sensor_msgs::PointCloud2 out_msg;
@@ -100,10 +115,12 @@ private:
         pub_.publish(out_msg);
     }
 
-    void colorize(const std::vector<cv::Point3f>& P3, const cv::Mat& img, const Eigen::Matrix4d& T_camera_lidar,
-        const cv::Mat& K, const cv::Mat& dist, const std::string& distortion_model,
-        int width, int height, bool is_right, bool mirror_u,
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr& out) {
+    void colorize(const std::vector<cv::Point3f>& P3, const cv::Mat& img, 
+        const Eigen::Matrix4d& T_camera_lidar, const cv::Mat& K, const cv::Mat& dist, 
+        const std::string& distortion_model, int width, int height, 
+        bool is_right, bool mirror_u, 
+        pcl::PointCloud<PointXYZRGBRing>::Ptr& out,
+        const pcl::PointCloud<PointXYZRGBRing>::Ptr& in) {
 
         // Invert the transform to get T lidar to camera
         Eigen::Matrix4d T = T_camera_lidar.inverse();
@@ -135,9 +152,13 @@ private:
             int v = static_cast<int>(std::round(P2[i].y));
             if (u < 0 || u >= width || v < 0 || v >= height) continue;
             cv::Vec3b c = img.at<cv::Vec3b>(v, u);
-            pcl::PointXYZRGB pt;
+            PointXYZRGBRing pt;
             pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
-            pt.r = c[2]; pt.g = c[1]; pt.b = c[0];
+            uint32_t rgb = (static_cast<uint32_t>(c[2]) << 16 |
+                static_cast<uint32_t>(c[1]) << 8  |
+                static_cast<uint32_t>(c[0]));
+            pt.rgb = *reinterpret_cast<float*>(&rgb);
+            pt.ring = in->points[i].ring;  // copy ring from original point
             out->points.push_back(pt);
         }
     }
