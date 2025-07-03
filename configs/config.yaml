@@ -29,3 +29,6 @@ T_lidar_camera_left:
   - [0.022218, -0.999372, -0.0275945, -0.125028]
   - [0.0, 0.0, 0.0, 1.0]
   
+# 
+max_time_offset: 0.05         # seconds, allowable timestamp difference
+initial_startup_delay: 0.1    # seconds, delay before starting sync timer
