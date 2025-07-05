@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "test_point_cloud_projection",
+            "name": "ColoriseScan",
             "type": "ros",
             "request": "launch",
             "target": "/home/shuoyuan/catkin_slam_ws/src/point_cloud_projection/launch/run.launch"

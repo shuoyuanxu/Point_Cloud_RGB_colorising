@@ -3,7 +3,7 @@
   <arg name="config_path" default="$(find point_cloud_projection)/configs/config.yaml"/>
 
   <node pkg="point_cloud_projection"
-        type="test_point_cloud_projection"
+        type="ColoriseScan"
         name="point_cloud_projection"
         output="screen">
     <param name="config_path" value="$(arg config_path)"/>

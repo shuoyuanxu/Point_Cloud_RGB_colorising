@@ -59,12 +59,12 @@ include_directories(
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-add_executable(test_point_cloud_projection
-    src/test_point_cloud_projection.cc
+add_executable(ColoriseScan
+    src/ColoriseScan.cc
     src/utils.cc
 )
 
-target_link_libraries(test_point_cloud_projection
+target_link_libraries(ColoriseScan
     PUBLIC
     ${PCL_LIBRARIES}
     ${OpenCV_LIBS}
