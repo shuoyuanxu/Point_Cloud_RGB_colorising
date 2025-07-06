@@ -76,7 +76,8 @@ private:
     double max_time_offset_;
     double initial_startup_delay_;
     ros::Timer color_timer_;
-
+    bool keep_uncolored_points_;
+    
     std::string config_path_, cloud_topic_, output_topic_;
     std::string image_topic_right_, image_topic_left_;
     std::string distortion_model_right_, distortion_model_left_;

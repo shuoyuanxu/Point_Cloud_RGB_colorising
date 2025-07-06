@@ -2,16 +2,17 @@
 
 # File paths
 map_pcd_path: /home/shu/Downloads/LOAM/GlobalMap.pcd
-save_pcd_path: ./colored_map.pcd
+save_pcd_path: ./colored_map.pcd  # only one entry
+keep_uncolored_points: 1
 
 # Topics
 image_topic_right: /right/image_raw/compressed
 image_topic_left: /left/image_raw/compressed
 odom_topic: /lio_sam/mapping/path
 output_topic: /colorised_points
+pointcloud_topic: /ouster/points
 
 # Output settings
-save_pcd_path: colored_map.pcd
 min_color_frames: 3
 
 # Synchronisation parameters
