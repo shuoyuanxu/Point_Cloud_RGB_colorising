@@ -15,6 +15,8 @@
 #include <deque>
 #include <limits>
 #include <map>
+#include <pcl/filters/filter.h>
+#include <pcl/filters/impl/filter.hpp>
 
 struct PointXYZRGBIntensity {
     PCL_ADD_POINT4D;
