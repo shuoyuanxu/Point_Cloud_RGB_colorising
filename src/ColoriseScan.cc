@@ -16,6 +16,7 @@ PointCloudColorizer::PointCloudColorizer(ros::NodeHandle& nh) : nh_(nh) {
     fs["image_topic_left"] >> image_topic_left_;
     fs["pointcloud_topic"] >> cloud_topic_;
     fs["output_topic"] >> output_topic_;
+    fs["keep_uncolored_points"] >> keep_uncolored_points_; 
 
     fs["intrinsics_right"] >> intr_right_;
     cv_K_right_ = (cv::Mat_<double>(3,3) << intr_right_[0],0,intr_right_[2],0,intr_right_[1],intr_right_[3],0,0,1);
@@ -94,6 +95,7 @@ void PointCloudColorizer::callback(const sensor_msgs::PointCloud2ConstPtr& cloud
                                    const sensor_msgs::CompressedImageConstPtr& img_left_msg) {
     pcl::PointCloud<pcl::PointXYZI>::Ptr in_raw(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::fromROSMsg(*cloud_msg, *in_raw);
+
     pcl::PointCloud<PointXYZRGBIntensity>::Ptr in(new pcl::PointCloud<PointXYZRGBIntensity>);
     in->points.reserve(in_raw->size());
     for (const auto& p : in_raw->points) {
@@ -102,29 +104,34 @@ void PointCloudColorizer::callback(const sensor_msgs::PointCloud2ConstPtr& cloud
         pt.y = p.y;
         pt.z = p.z;
         pt.intensity = p.intensity;
-        pt.rgb = 0.0f;  // placeholder, will be filled in colorize()
+        pt.rgb = 0.0f;
         in->points.push_back(pt);
     }
 
     auto out = boost::make_shared<pcl::PointCloud<PointXYZRGBIntensity>>();
     out->header.frame_id = cloud_msg->header.frame_id;
-    out->is_dense = false; out->height = 1;
+    out->is_dense = false;
+    out->height = 1;
 
-    cv::Mat img_right = cv::imdecode(cv::Mat(img_right_msg->data), cv::IMREAD_COLOR);
-    cv::Mat img_left = cv::imdecode(cv::Mat(img_left_msg->data), cv::IMREAD_COLOR);
-    std::vector<cv::Point3f> P3; 
+    if (keep_uncolored_points_) {
+        out->points = in->points; // pre-fill with all points
+    } else {
+        out->points.clear(); // selectively populate
+    }
+
+    std::vector<cv::Point3f> P3;
     for (auto& p : in->points) P3.emplace_back(p.x, p.y, p.z);
 
-    // ROS_INFO_STREAM_THROTTLE(2.0, "[Sync Info] LiDAR time: " << cloud_msg->header.stamp
-    //     << ", Right image time: " << img_right_msg->header.stamp
-    //     << ", Left image time: " << img_left_msg->header.stamp);
-
+    cv::Mat img_right = cv::imdecode(cv::Mat(img_right_msg->data), cv::IMREAD_COLOR);
+    cv::Mat img_left  = cv::imdecode(cv::Mat(img_left_msg->data),  cv::IMREAD_COLOR);
+    
     colorize(P3, img_right, T_lidar_camera_right_, cv_K_right_, distCoeffs_right_, distortion_model_right_,
-             width_right_, height_right_, true, false, out, in);
+                width_right_, height_right_, true, false, out, in);
     colorize(P3, img_left, T_lidar_camera_left_, cv_K_left_, distCoeffs_left_, distortion_model_left_,
-             width_left_, height_left_, false, true, out, in);
+                width_left_, height_left_, false, true, out, in);
 
     out->width = out->points.size();
+
     sensor_msgs::PointCloud2 out_msg;
     pcl::PCLPointCloud2 pcl_pc2;
     pcl::toPCLPointCloud2(*out, pcl_pc2);
@@ -142,6 +149,7 @@ void PointCloudColorizer::colorize(const std::vector<cv::Point3f>& P3, const cv:
     Eigen::Matrix4d T = T_camera_lidar.inverse();
     Eigen::Matrix3d R_e = T.block<3,3>(0,0);
     Eigen::Vector3d t_e = T.block<3,1>(0,3);
+
     cv::Mat R_cv, rvec, tvec(3,1,CV_64F);
     cv::eigen2cv(R_e, R_cv); cv::Rodrigues(R_cv, rvec);
     for (int i = 0; i < 3; ++i) tvec.at<double>(i,0) = t_e(i);
@@ -153,23 +161,30 @@ void PointCloudColorizer::colorize(const std::vector<cv::Point3f>& P3, const cv:
         cv::projectPoints(P3, P2, rvec, tvec, K, dist);
 
     for (size_t i = 0; i < P2.size(); ++i) {
-        Eigen::Vector4d pt_lidar(P3[i].x, P3[i].y, P3[i].z, 1.0);
-        Eigen::Vector4d pt_cam = T * pt_lidar;
-        if (pt_cam.z() <= 0) continue;
+        Eigen::Vector4d pt_cam = T * Eigen::Vector4d(P3[i].x, P3[i].y, P3[i].z, 1.0);
+        bool valid = pt_cam.z() > 0;
+        int u = std::round(P2[i].x), v = std::round(P2[i].y);
+        valid &= (u >= 0 && u < width && v >= 0 && v < height);
 
-        int u = static_cast<int>(std::round(P2[i].x));
-        int v = static_cast<int>(std::round(P2[i].y));
-        if (u < 0 || u >= width || v < 0 || v >= height) continue;
-        cv::Vec3b c = img.at<cv::Vec3b>(v, u);
-        PointXYZRGBIntensity pt;
-        pt.x = P3[i].x; pt.y = P3[i].y; pt.z = P3[i].z;
-        pt.rgb = (static_cast<uint32_t>(c[2]) << 16 |
-                  static_cast<uint32_t>(c[1]) << 8  |
-                  static_cast<uint32_t>(c[0]));
-        pt.intensity = in->points[i].intensity;
-        out->points.push_back(pt);
+        if (!keep_uncolored_points_ && !valid) continue; // Skip uncolored points if flag is false
+
+        uint32_t rgb = 0; // default black
+        if (valid) {
+            cv::Vec3b c = img.at<cv::Vec3b>(v, u);
+            rgb = (uint32_t(c[2]) << 16 | uint32_t(c[1]) << 8 | uint32_t(c[0]));
+        }
+
+        if (keep_uncolored_points_) {
+            if (rgb != 0) // only overwrite if color is valid
+                out->points[i].rgb = rgb;
+        } else if (valid) {
+            PointXYZRGBIntensity pt = in->points[i];
+            pt.rgb = rgb;
+            out->points.push_back(pt);
+        }
     }
 }
+
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "colorize_pointcloud_node");
