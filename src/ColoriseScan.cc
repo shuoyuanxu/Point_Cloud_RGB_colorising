@@ -132,9 +132,14 @@ void PointCloudColorizer::callback(const sensor_msgs::PointCloud2ConstPtr& cloud
 
     out->width = out->points.size();
 
+    // Remove NaNs before publishing
+    pcl::PointCloud<PointXYZRGBIntensity>::Ptr cleaned(new pcl::PointCloud<PointXYZRGBIntensity>);
+    std::vector<int> indices;
+    pcl::removeNaNFromPointCloud(*out, *cleaned, indices);
+
     sensor_msgs::PointCloud2 out_msg;
     pcl::PCLPointCloud2 pcl_pc2;
-    pcl::toPCLPointCloud2(*out, pcl_pc2);
+    pcl::toPCLPointCloud2(*cleaned, pcl_pc2);
     pcl_conversions::fromPCL(pcl_pc2, out_msg);
     out_msg.header = cloud_msg->header;
     pub_.publish(out_msg);
