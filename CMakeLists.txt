@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.5)
 project(point_cloud_projection)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -25,6 +25,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall -Wuninitialized -fno-omit-frame-pointer")
 
 find_package(PCL 1.3 REQUIRED)
 find_package(Eigen3 REQUIRED)
+set(OpenCV_DIR "/usr/local/share/opencv4")
 find_package(OpenCV 4 REQUIRED)
 find_package(VTK REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
@@ -49,6 +50,7 @@ catkin_package(
 
 include(${VTK_USE_FILE})
 include_directories(
+    include
     ${PCL_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
@@ -64,6 +66,11 @@ add_executable(ColoriseScan
     src/utils.cc
 )
 
+add_executable(ColoriseMap
+    src/ColoriseMap.cc
+    src/utils.cc
+)
+
 target_link_libraries(ColoriseScan
     PUBLIC
     ${PCL_LIBRARIES}
@@ -72,4 +79,10 @@ target_link_libraries(ColoriseScan
     ${catkin_LIBRARIES}
 )
 
-
+target_link_libraries(ColoriseMap
+    PUBLIC
+    ${PCL_LIBRARIES}
+    ${OpenCV_LIBS}
+    ${VTK_LIBRARIES}
+    ${catkin_LIBRARIES}
+)

@@ -1,49 +1,5 @@
 #include "utils.h"
 
-
-void parse(std::shared_ptr<cv::FileStorage> &config_file_storage, const std::string &parameter_name, Eigen::VectorXd &parsed_values){
-    std::stringstream log_stream;
-    
-    cv::FileNode node = (*config_file_storage)[parameter_name];
-    log_stream << parameter_name << " : [ ";
-
-    for (size_t i = 0; i < node.size(); ++i) {
-        parsed_values(i) = static_cast<double>(node[i]);
-        log_stream << parsed_values(i) << ", ";
-        
-    }
-    
-    std::cout << log_stream.str() << "]" << std::endl;
-
-}
-
-void parse(std::shared_ptr<cv::FileStorage> &config_file_storage, const std::string &parameter_name, Eigen::Matrix4d &parsed_values){
-    std::stringstream log_stream;
-    cv::FileNode node = (*config_file_storage)[parameter_name];
-    
-    log_stream << parameter_name << " : [ " << "\n";
-
-    for (size_t i = 0; i < node.size(); ++i) {
-        cv::FileNode row = node[i];
-        if (row.size() != 4) {
-            std::cerr << "Error: Row " << i << " does not have 4 columns!" << std::endl;
-            return;
-        }
-
-        for (size_t j = 0; j < row.size(); ++j) {
-            parsed_values(i, j) = static_cast<double>(row[j]);
-
-            log_stream << parsed_values(i) << ", ";
-        }
-
-        if(i < node.size()-1) {log_stream << "\n";}
-    }
-
-    std::cout << log_stream.str() << "]" << std::endl;
-
-
-}
-
 // convert keypoint from pixel image plane to camera coordinate
 cv::Point2d camera2pixel(const cv::Point3d &pt3d, cv::Mat &K)
 {
@@ -53,3 +9,19 @@ cv::Point2d camera2pixel(const cv::Point3d &pt3d, cv::Mat &K)
     );
 }
 
+void parseMat(const cv::FileStorage& fs, const std::string& name, Eigen::Matrix4d& M) {
+    cv::FileNode node = fs[name];
+    if (node.empty()) throw std::runtime_error("Missing matrix " + name);
+    std::vector<double> v;
+    if (node.isSeq() && node[0].isSeq()) {
+        for (auto row : node) for (auto val : row) v.push_back((double)val);
+    } else {
+        node >> v;
+    }
+    if (v.size() != 16) {
+        std::ostringstream oss;
+        oss << name << " must have 16 elements, but got " << v.size();
+        throw std::runtime_error(oss.str());
+    }
+    M = Eigen::Map<const Eigen::Matrix<double,4,4,Eigen::RowMajor>>(v.data());
+}

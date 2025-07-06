@@ -1,34 +1,41 @@
-%YAML:1.0 # need to specify the file type at the top!
+%YAML:1.0
 
+# File paths
+map_pcd_path: /home/shu/Downloads/LOAM/GlobalMap.pcd
+save_pcd_path: ./colored_map.pcd
 
-
-pointcloud_topic: /ouster/points
+# Topics
+image_topic_right: /right/image_raw/compressed
+image_topic_left: /left/image_raw/compressed
+odom_topic: /lio_sam/mapping/path
 output_topic: /colorised_points
 
-# right camera
+# Output settings
+save_pcd_path: colored_map.pcd
+min_color_frames: 3
+
+# Synchronisation parameters
+max_time_offset: 0.05         # seconds
+initial_startup_delay: 0.1    # seconds
+
+# Right camera
 distortion_coeffs_right: [-0.04345139283609733, 0.019439878275353862, -0.03544505860721041, 0.022121647569599227]
 distortion_model_right: equidistant
 intrinsics_right: [1059.6087870662222, 1059.5973705610731, 1050.3552896004385, 731.3912426749002]
 resolution_right: [2048, 1536] 
-image_topic_right: /right/image_raw/compressed
 T_lidar_camera_right: 
   - [-0.692832, -0.00931471, 0.721038, 0.1525]
   - [-0.721098, 0.00812054, -0.692785, -0.149126]
   - [0.000597876, -0.999924, -0.012343, -0.11506]
   - [0.0, 0.0, 0.0, 1.0]
 
-# left camera
+# Left camera
 distortion_coeffs_left: [-0.041736301331338786, 0.01166417790504481, -0.011437286832906436, 0.0033946415180739157]
 distortion_model_left: equidistant
 intrinsics_left: [1048.498526504792, 1048.4052212551244, 1061.9662410412484, 704.0318680976642]
 resolution_left: [2048, 1536]
-image_topic_left: /left/image_raw/compressed
 T_lidar_camera_left: 
   - [0.712262, -0.00354587, 0.701905, 0.16716]
   - [-0.701562, -0.0352494, 0.711736, 0.132285]
   - [0.022218, -0.999372, -0.0275945, -0.125028]
   - [0.0, 0.0, 0.0, 1.0]
-  
-# 
-max_time_offset: 0.05         # seconds, allowable timestamp difference
-initial_startup_delay: 0.1    # seconds, delay before starting sync timer

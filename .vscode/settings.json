@@ -89,6 +89,15 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "valarray": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "dense": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "tensor": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "coroutine": "cpp",
+        "numbers": "cpp",
+        "stop_token": "cpp"
     }
 }
