@@ -14,7 +14,7 @@ pointcloud_topic: /ouster/points
 
 # Output settings
 min_color_frames: 3
-
+max_lidar_z: 1.5  # meters, maximum Z value for lidar points to be considered
 # Synchronisation parameters
 max_time_offset: 0.05         # seconds
 initial_startup_delay: 0.1    # seconds

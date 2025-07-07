@@ -17,6 +17,7 @@ PointCloudColorizer::PointCloudColorizer(ros::NodeHandle& nh) : nh_(nh) {
     fs["pointcloud_topic"] >> cloud_topic_;
     fs["output_topic"] >> output_topic_;
     fs["keep_uncolored_points"] >> keep_uncolored_points_; 
+    fs["max_lidar_z"] >> max_lidar_z_;
 
     fs["intrinsics_right"] >> intr_right_;
     cv_K_right_ = (cv::Mat_<double>(3,3) << intr_right_[0],0,intr_right_[2],0,intr_right_[1],intr_right_[3],0,0,1);
@@ -166,6 +167,7 @@ void PointCloudColorizer::colorize(const std::vector<cv::Point3f>& P3, const cv:
         cv::projectPoints(P3, P2, rvec, tvec, K, dist);
 
     for (size_t i = 0; i < P2.size(); ++i) {
+        if (P3[i].z > max_lidar_z_) continue; // skip this point
         Eigen::Vector4d pt_cam = T * Eigen::Vector4d(P3[i].x, P3[i].y, P3[i].z, 1.0);
         bool valid = pt_cam.z() > 0;
         int u = std::round(P2[i].x), v = std::round(P2[i].y);
