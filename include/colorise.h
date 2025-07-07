@@ -20,15 +20,29 @@
 
 struct PointXYZRGBIntensity {
     PCL_ADD_POINT4D;
-    std::uint32_t rgb;
     float intensity;
+    std::uint32_t t;
+    std::uint16_t reflectivity;
+    std::uint16_t ring;
+    std::uint16_t ambient;
+    std::uint32_t range;
+    std::uint32_t rgb;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(PointXYZRGBIntensity,
-                                  (float, x, x)(float, y, y)(float, z, z)
-                                  (float, rgb, rgb)(float, intensity, intensity))
-                                  
+                                (float, x, x)
+                                (float, y, y)
+                                (float, z, z)
+                                (float, intensity, intensity)
+                                (std::uint32_t, t, t)
+                                (std::uint16_t, reflectivity, reflectivity)
+                                (std::uint16_t, ring, ring)
+                                (std::uint16_t, ambient, ambient)
+                                (std::uint32_t, range, range)
+                                (std::uint32_t, rgb, rgb)
+)
+
 struct PointKey {
     float x, y, z;
     bool operator<(const PointKey& other) const {
