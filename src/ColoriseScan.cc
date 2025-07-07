@@ -94,20 +94,36 @@ typename T::value_type PointCloudColorizer::findClosest(const T& buffer, ros::Ti
 void PointCloudColorizer::callback(const sensor_msgs::PointCloud2ConstPtr& cloud_msg,
                                    const sensor_msgs::CompressedImageConstPtr& img_right_msg,
                                    const sensor_msgs::CompressedImageConstPtr& img_left_msg) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr in_raw(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::fromROSMsg(*cloud_msg, *in_raw);
-
     pcl::PointCloud<PointXYZRGBIntensity>::Ptr in(new pcl::PointCloud<PointXYZRGBIntensity>);
-    in->points.reserve(in_raw->size());
-    for (const auto& p : in_raw->points) {
+    in->header.frame_id = cloud_msg->header.frame_id;
+    in->is_dense = false;
+    in->height = 1;
+
+    const size_t point_step = cloud_msg->point_step;
+    const size_t num_points = cloud_msg->width * cloud_msg->height;
+    const auto& data = cloud_msg->data;
+
+    in->points.reserve(num_points);
+
+    for (size_t i = 0; i < num_points; ++i) {
+        const uint8_t* ptr = &data[i * point_step];
+
         PointXYZRGBIntensity pt;
-        pt.x = p.x;
-        pt.y = p.y;
-        pt.z = p.z;
-        pt.intensity = p.intensity;
-        pt.rgb = 0.0f;
+        std::memcpy(&pt.x,           ptr +  0, sizeof(float));
+        std::memcpy(&pt.y,           ptr +  4, sizeof(float));
+        std::memcpy(&pt.z,           ptr +  8, sizeof(float));
+        std::memcpy(&pt.intensity,   ptr + 16, sizeof(float));
+        std::memcpy(&pt.t,           ptr + 20, sizeof(uint32_t));
+        std::memcpy(&pt.reflectivity,ptr + 24, sizeof(uint16_t));
+        std::memcpy(&pt.ring,        ptr + 26, sizeof(uint16_t));
+        std::memcpy(&pt.ambient,     ptr + 28, sizeof(uint16_t));
+        std::memcpy(&pt.range,       ptr + 32, sizeof(uint32_t));
+        pt.rgb = 0;
+
         in->points.push_back(pt);
     }
+
+    in->width = in->points.size();
 
     auto out = boost::make_shared<pcl::PointCloud<PointXYZRGBIntensity>>();
     out->header.frame_id = cloud_msg->header.frame_id;
