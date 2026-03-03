@@ -1,8 +1,8 @@
 %YAML:1.0
 
 # ── File paths ────────────────────────────────────────────────────────────────
-map_pcd_path: PCD/GlobalMap.pcd
-save_pcd_path: PCD/colored_map.pcd
+save_pcd_path:  $(find point_cloud_projection)/PCD/Color.pcd
+map_pcd_path:   $(find point_cloud_projection)/PCD/GlobalMap.pcd
 keep_uncolored_points: 0
 # set false to use IMU instead
 use_odom_compensation: false  
