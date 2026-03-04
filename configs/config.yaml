@@ -5,19 +5,19 @@ save_pcd_path:  $(find point_cloud_projection)/PCD/Color.pcd
 map_pcd_path:   $(find point_cloud_projection)/PCD/GlobalMap.pcd
 keep_uncolored_points: 0
 # set false to use IMU instead
-use_odom_compensation: false  
+use_odom_compensation: true  
 
 # ── Topics ────────────────────────────────────────────────────────────────────
 # NOTE: /right and /left image topics are not present in the recorded bag.
 #       Using /forwardRight and /forwardLeft which have both image and camera_info.
 image_topic_right: /forwardRight/image_raw/compressed
 image_topic_left:  /forwardLeft/image_raw/compressed
-odom_topic:        /lio_sam/mapping/path
 output_topic:      /colorised_points
 pointcloud_topic:  /ouster/points
 imu_topic:  /ms/imu/data
 imu_frame:  imu_link
 odom_topic: /lio_sam/mapping/odometry
+base_frame: "base_link"
 
 # ── CameraInfo topics (intrinsics + distortion sourced from here at runtime) ──
 camera_info_topic_right: /forwardRight/camera_info

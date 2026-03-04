@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
   <arg name="config_path" default="$(find point_cloud_projection)/configs/config.yaml"/>
-
   <node pkg="point_cloud_projection"
         type="ColoriseScan"
         name="point_cloud_projection"

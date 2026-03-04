@@ -66,12 +66,11 @@ class PointCloudColorizer {
 public:
     explicit PointCloudColorizer(ros::NodeHandle& nh);
 
+    // -----------------------------------------------------------------------
+    // Map node
+    // -----------------------------------------------------------------------
     void runMapNode();
     void saveFinalMap();
-    void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
-    void imgRightCallback(const sensor_msgs::CompressedImageConstPtr& msg);
-    void imgLeftCallback(const sensor_msgs::CompressedImageConstPtr& msg);
-    void trySyncAndProcess();
     void pathCallback(const nav_msgs::PathConstPtr& msg);
     void mapCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
     bool lookupPose(const ros::Time& t, Eigen::Matrix4d& T_out);
@@ -80,35 +79,87 @@ public:
     cv::Vec3b averageColor(const std::vector<cv::Vec3b>& colors);
     void colorizeFromPCD(const ros::TimerEvent&);
 
-    // NEW: CameraInfo callbacks
+    // -----------------------------------------------------------------------
+    // Scan colorisation
+    // -----------------------------------------------------------------------
+    void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
+    void imgRightCallback(const sensor_msgs::CompressedImageConstPtr& msg);
+    void imgLeftCallback(const sensor_msgs::CompressedImageConstPtr& msg);
+    void trySyncAndProcess();
+
     void camInfoRightCallback(const sensor_msgs::CameraInfoConstPtr& msg);
     void camInfoLeftCallback(const sensor_msgs::CameraInfoConstPtr& msg);
 
+    // Main processing callback — timestamps passed explicitly so each camera
+    // can be compensated to its own capture time.
     void callback(const sensor_msgs::PointCloud2ConstPtr& cloud_msg,
-                const sensor_msgs::CompressedImageConstPtr& img_right_msg,
-                const sensor_msgs::CompressedImageConstPtr& img_left_msg,
-                const Eigen::Matrix4d& T_compensation);
+                  const sensor_msgs::CompressedImageConstPtr& img_right_msg,
+                  const sensor_msgs::CompressedImageConstPtr& img_left_msg,
+                  ros::Time t_lidar,
+                  ros::Time t_cam);
 
-    void colorize(const std::vector<cv::Point3f>& P3, const cv::Mat& img,
-                  const Eigen::Matrix4d& T_camera_lidar, const cv::Mat& K, const cv::Mat& dist,
-                  const std::string& distortion_model, int width, int height,
-                  bool is_right, bool mirror_u,
+    // Project P3 (lidar-frame points at t_lidar) into img using the unified
+    // T_cam_from_lidar transform (motion-compensated + extrinsic in one step).
+    // Project P3 into img using T_cam_from_points (motion-compensated + extrinsic).
+    // source_z_max: filters points by their Z in the SOURCE frame before projection.
+    //   ColoriseScan: pass max_lidar_z_ (lidar-frame height filter).
+    //   ColoriseMap:  omit or pass FLT_MAX — world-frame Z is not meaningful here,
+    //                 the camera-depth check (pt_cam.z > 0) handles occlusion instead.
+    void colorize(const std::vector<cv::Point3f>& P3,
+                  const cv::Mat& img,
+                  const Eigen::Matrix4d& T_cam_from_points,
+                  const cv::Mat& K,
+                  const cv::Mat& dist,
+                  const std::string& distortion_model,
+                  int width, int height,
                   pcl::PointCloud<PointXYZRGBIntensity>::Ptr& out,
-                  const pcl::PointCloud<PointXYZRGBIntensity>::Ptr& in);
+                  const pcl::PointCloud<PointXYZRGBIntensity>::Ptr& in,
+                  float source_z_max = std::numeric_limits<float>::max());
 
+    // -----------------------------------------------------------------------
+    // Motion compensation — odometry path
+    //
+    // Computes the full T_cam(t_cam) <- lidar(t_lidar) transform by
+    // interpolating odometry at both timestamps and composing with static TF
+    // extrinsics for both the lidar and the named camera frame.
+    // Returns false if odometry or TF data are unavailable.
+    // -----------------------------------------------------------------------
+    bool computeCamFromLidar(ros::Time t_lidar, ros::Time t_cam,
+                             const std::string& cam_frame,
+                             Eigen::Matrix4d& T_out);
+
+    // -----------------------------------------------------------------------
+    // Motion compensation — IMU path
+    //
+    // Computes T_cam(t_cam) <- lidar(t_lidar) using AHRS SLERP for rotation
+    // and double-integrated gravity-removed accelerometer for translation,
+    // then composes with the static camera extrinsic from TF.
+    // Returns false if IMU data or TF extrinsics are unavailable.
+    // -----------------------------------------------------------------------
+    bool computeCamFromLidarIMU(ros::Time t_lidar, ros::Time t_cam,
+                                const std::string& cam_frame,
+                                Eigen::Matrix4d& T_out);
+
+    // -----------------------------------------------------------------------
+    // IMU / odometry helpers
+    // -----------------------------------------------------------------------
+    void imuCallback(const sensor_msgs::ImuConstPtr& msg);
+    bool interpolateIMUOrientation(ros::Time t, Eigen::Quaterniond& q_out);
+
+    void odomCallback(const nav_msgs::OdometryConstPtr& msg);
+    bool interpolateOdometry(ros::Time t, Eigen::Matrix4d& T_out);
+
+    // -----------------------------------------------------------------------
+    // Buffer utilities
+    // -----------------------------------------------------------------------
     template<typename T>
     typename T::value_type findClosest(const T& buffer, ros::Time target_time);
 
     template<typename T>
-    void cleanOldMsgs(std::deque<T>& buffer, ros::Time latest_time);
-    void imuCallback(const sensor_msgs::ImuConstPtr& msg);
-    bool interpolateIMUOrientation(ros::Time t, Eigen::Quaterniond& q_out);
-    void odomCallback(const nav_msgs::OdometryConstPtr& msg);
-    bool interpolateOdometry(ros::Time t, Eigen::Matrix4d& T_out);
-    Eigen::Matrix4d computeMotionCompensationOdom(ros::Time t_lidar, ros::Time t_cam);
-    Eigen::Matrix4d computeMotionCompensation(ros::Time t_lidar, ros::Time t_cam);
-    template<typename T>
     typename T::value_type findClosestBefore(const T& buffer, ros::Time reference_time);
+
+    template<typename T>
+    void cleanOldMsgs(std::deque<T>& buffer, ros::Time latest_time);
 
 private:
     ros::NodeHandle nh_;
@@ -124,6 +175,7 @@ private:
     ros::Subscriber sub_imu_;
     std::deque<sensor_msgs::ImuConstPtr> imu_buffer_;
     std::string odom_compensation_frame_; // e.g. "base_link"
+    std::string base_frame_;              // robot body frame in TF tree (e.g. "base_link")
     ros::Subscriber sub_odom_;
     std::deque<nav_msgs::OdometryConstPtr> odom_buffer_;
     bool use_odom_compensation_;  // true=odom, false=imu
@@ -132,7 +184,6 @@ private:
     tf2_ros::TransformListener tf_listener_;
     std::string lidar_frame_;
 
-    // NEW: CameraInfo subscribers and latched storage
     ros::Subscriber sub_info_right_, sub_info_left_;
     std::string camera_info_topic_right_, camera_info_topic_left_;
     boost::optional<sensor_msgs::CameraInfo> cam_info_right_, cam_info_left_;
@@ -144,7 +195,9 @@ private:
     std::deque<sensor_msgs::CompressedImageConstPtr> img_right_buffer_;
     std::deque<sensor_msgs::CompressedImageConstPtr> img_left_buffer_;
 
-    // For map node (unchanged)
+    // -----------------------------------------------------------------------
+    // Map node members
+    // -----------------------------------------------------------------------
     std::string map_topic_, odom_topic_, save_path_;
     std::string map_pcd_path_;
     int min_color_frames_;
@@ -153,6 +206,15 @@ private:
     pcl::PointCloud<PointXYZRGBIntensity>::Ptr accumulated_map_;
     std::map<PointKey, std::vector<cv::Vec3b>> color_history_;
     pcl::PointCloud<PointXYZRGBIntensity>::Ptr map_points_;
+    ros::Publisher pub_raw_map_;
+    ros::Publisher pub_progress_;
+    ros::Publisher pub_robot_pose_;
+    ros::Publisher pub_frustum_;
+    void publishRawMap();
+    void publishRobotPose(const Eigen::Matrix4d& T_world_base, ros::Time t);
+    void publishFrustum(const Eigen::Matrix4d& T_world_camera,
+                        const sensor_msgs::CameraInfo& info,
+                        ros::Time t, int id, float r, float g, float b);
 };
 
 

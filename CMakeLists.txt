@@ -26,10 +26,11 @@ find_package(catkin REQUIRED COMPONENTS
     sensor_msgs
     cv_bridge
     message_filters
-    tf2_ros           # ADDED
-    tf2_eigen         # ADDED
-    tf2_geometry_msgs # ADDED
+    tf2_ros           
+    tf2_eigen         
+    tf2_geometry_msgs
     roslib
+    visualization_msgs
 )
 
 catkin_package(
@@ -40,9 +41,9 @@ catkin_package(
     sensor_msgs
     cv_bridge
     message_filters
-    tf2_ros           # ADDED
-    tf2_eigen         # ADDED
-    tf2_geometry_msgs # ADDED
+    tf2_ros
+    tf2_eigen
+    tf2_geometry_msgs
     roslib
 )
 
