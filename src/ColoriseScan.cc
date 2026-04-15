@@ -24,34 +24,42 @@ PointCloudColorizer::PointCloudColorizer(ros::NodeHandle& nh)
     fs["camera_info_topic_left"]  >> camera_info_topic_left_;
     fs["imu_topic"]               >> imu_topic_;
     fs["imu_frame"]               >> imu_frame_;
+    std::string use_calib_str = "true";
+    fs["use_calibration_file"] >> use_calib_str;
+    bool use_calibration_file = (use_calib_str != "false" && use_calib_str != "0");
     fs.release();
 
-    // ── Hardcoded extrinsics from configs/calibration.yaml ────────────────────
-    //
-    // T_forwardLeft_cam_os_sensor  (cam_left from lidar, direct)
-    T_cam_lidar_left_ <<
-         0.0365235158, -0.9992455766, -0.0132026663,  0.0715811084,
-         0.0007068971,  0.0132373111, -0.9999121331, -0.0815248470,
-         0.9993325438,  0.0365109736,  0.0011898369, -0.1028095976,
-         0.0,           0.0,           0.0,           1.0;
+    // ── Extrinsics: hardcoded from calibration.yaml OR live TF lookup ─────────
+    if (use_calibration_file) {
+        // Values from configs/calibration.yaml
+        //
+        // T_forwardLeft_cam_os_sensor  (cam_left from lidar, direct)
+        T_cam_lidar_left_ <<
+             0.0365235158, -0.9992455766, -0.0132026663,  0.0715811084,
+             0.0007068971,  0.0132373111, -0.9999121331, -0.0815248470,
+             0.9993325438,  0.0365109736,  0.0011898369, -0.1028095976,
+             0.0,           0.0,           0.0,           1.0;
 
-    // T_os_sensor_forwardRight_cam  (lidar from cam_right) — inverted to get cam_right from lidar
-    Eigen::Matrix4d T_lidar_cam_right;
-    T_lidar_cam_right <<
-         0.0124443801, -0.0001078424,  0.9999225599,  0.1023230120,
-        -0.9998382680,  0.0129833120,  0.0124447313, -0.0631096435,
-        -0.0129836487, -0.9999157074,  0.0000537442, -0.0825364298,
-         0.0,           0.0,           0.0,           1.0;
-    T_cam_lidar_right_ = T_lidar_cam_right.inverse();
+        // T_os_sensor_forwardRight_cam  (lidar from cam_right) — inverted to get cam_right from lidar
+        Eigen::Matrix4d T_lidar_cam_right;
+        T_lidar_cam_right <<
+             0.0124443801, -0.0001078424,  0.9999225599,  0.1023230120,
+            -0.9998382680,  0.0129833120,  0.0124447313, -0.0631096435,
+            -0.0129836487, -0.9999157074,  0.0000537442, -0.0825364298,
+             0.0,           0.0,           0.0,           1.0;
+        T_cam_lidar_right_ = T_lidar_cam_right.inverse();
 
-    // T_imu_link_os_sensor  (rotation block only, imu from lidar)
-    R_imu_lidar_ <<
-         0.9998459674, -0.0157202487,  0.0078048180,
-         0.0155436449,  0.9996328268,  0.0221947415,
-        -0.0081508592, -0.0220700073,  0.9997232008;
+        // T_imu_link_os_sensor  (rotation block only, imu from lidar)
+        R_imu_lidar_ <<
+             0.9998459674, -0.0157202487,  0.0078048180,
+             0.0155436449,  0.9996328268,  0.0221947415,
+            -0.0081508592, -0.0220700073,  0.9997232008;
 
-    calib_loaded_ = true;
-    ROS_INFO("[ColoriseScan] Extrinsics loaded from calibration.yaml constants");
+        calib_loaded_ = true;
+        ROS_INFO("[ColoriseScan] Extrinsics loaded from calibration.yaml constants");
+    } else {
+        ROS_INFO("[ColoriseScan] Extrinsics will be looked up from TF tree at runtime");
+    }
 
     // ── Subscribers ───────────────────────────────────────────────────────────
     sub_cloud_      = nh_.subscribe(cloud_topic_,            10,  &PointCloudColorizer::cloudCallback,        this);
@@ -141,11 +149,15 @@ bool PointCloudColorizer::computeCamFromLidarIMU(ros::Time t_lidar, ros::Time t_
     if (calib_loaded_) {
         bool is_right = (cam_frame.find("ight") != std::string::npos);
         T_cam_lidar_static = is_right ? T_cam_lidar_right_ : T_cam_lidar_left_;
+        ROS_INFO_ONCE("[ColoriseScan] [%s] extrinsic: hardcoded calibration.yaml",
+                      cam_frame.c_str());
     } else {
         try {
             T_cam_lidar_static = tf2::transformToEigen(
                 tf_buffer_.lookupTransform(cam_frame, lidar_frame_,
                                            ros::Time(0), ros::Duration(0.1))).matrix();
+            ROS_INFO_ONCE("[ColoriseScan] [%s] extrinsic: TF '%s' -> '%s'",
+                          cam_frame.c_str(), cam_frame.c_str(), lidar_frame_.c_str());
         } catch (const tf2::TransformException& ex) {
             ROS_WARN_THROTTLE(2.0, "[ColoriseScan] TF cam<-lidar failed for %s: %s",
                               cam_frame.c_str(), ex.what());
@@ -172,7 +184,23 @@ bool PointCloudColorizer::computeCamFromLidarIMU(ros::Time t_lidar, ros::Time t_
     }
 
     // R_imu_from_lidar for frame conversion
-    Eigen::Matrix3d R_imu_lidar = calib_loaded_ ? R_imu_lidar_ : Eigen::Matrix3d::Identity();
+    Eigen::Matrix3d R_imu_lidar;
+    if (calib_loaded_) {
+        R_imu_lidar = R_imu_lidar_;
+    } else {
+        try {
+            R_imu_lidar = tf2::transformToEigen(
+                tf_buffer_.lookupTransform(imu_frame_, lidar_frame_,
+                                           ros::Time(0), ros::Duration(0.1))).matrix()
+                          .block<3,3>(0,0);
+            ROS_INFO_ONCE("[ColoriseScan] R_imu_lidar: TF '%s' -> '%s'",
+                          imu_frame_.c_str(), lidar_frame_.c_str());
+        } catch (const tf2::TransformException& ex) {
+            ROS_WARN_THROTTLE(2.0, "[ColoriseScan] TF imu<-lidar failed: %s — using identity",
+                              ex.what());
+            R_imu_lidar = Eigen::Matrix3d::Identity();
+        }
+    }
 
     // Rotation delta in world frame, then expressed in lidar frame
     Eigen::Matrix3d R_delta_world = q_at_cam.normalized().toRotationMatrix().transpose()
