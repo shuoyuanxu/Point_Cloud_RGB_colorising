@@ -196,6 +196,15 @@ private:
     std::deque<sensor_msgs::CompressedImageConstPtr> img_left_buffer_;
 
     // -----------------------------------------------------------------------
+    // Calibration extrinsics (loaded directly from calibration.yaml)
+    // -----------------------------------------------------------------------
+    bool            calib_loaded_      = false;
+    std::string     calibration_path_;
+    Eigen::Matrix4d T_cam_lidar_left_  = Eigen::Matrix4d::Identity();
+    Eigen::Matrix4d T_cam_lidar_right_ = Eigen::Matrix4d::Identity();
+    Eigen::Matrix3d R_imu_lidar_       = Eigen::Matrix3d::Identity();
+
+    // -----------------------------------------------------------------------
     // Map node members
     // -----------------------------------------------------------------------
     std::string map_topic_, odom_topic_, save_path_;

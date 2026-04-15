@@ -74,7 +74,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 10
+      Size (Pixels): 5
       Size (m): 0.029999999329447746
       Style: Points
       Topic: /colorised_points
@@ -134,7 +134,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 9.986601829528809
+      Distance: 4.467609405517578
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -142,17 +142,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.1700267195701599
-        Y: 0.42231637239456177
-        Z: -0.06175230070948601
+        X: 0.33244630694389343
+        Y: 0.8046349883079529
+        Z: -0.09305533021688461
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.24520298838615417
+      Pitch: 0.32020267844200134
       Target Frame: <Fixed Frame>
-      Yaw: 2.725381374359131
+      Yaw: 3.920408248901367
     Saved: ~
 Window Geometry:
   Displays:
@@ -173,4 +173,4 @@ Window Geometry:
     collapsed: true
   Width: 1693
   X: 430
-  Y: 144
+  Y: 107

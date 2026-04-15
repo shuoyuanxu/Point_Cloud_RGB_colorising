@@ -5,7 +5,7 @@ save_pcd_path:  $(find point_cloud_projection)/PCD/Color.pcd
 map_pcd_path:   $(find point_cloud_projection)/PCD/GlobalMap.pcd
 keep_uncolored_points: 0
 # set false to use IMU instead
-use_odom_compensation: true  
+use_odom_compensation: false
 
 # ── Topics ────────────────────────────────────────────────────────────────────
 # NOTE: /right and /left image topics are not present in the recorded bag.
@@ -14,6 +14,7 @@ image_topic_right: /forwardRight/image_raw/compressed
 image_topic_left:  /forwardLeft/image_raw/compressed
 output_topic:      /colorised_points
 pointcloud_topic:  /ouster/points
+calibration_path: $(find point_cloud_projection)/configs/calibration.yaml
 imu_topic:  /ms/imu/data
 imu_frame:  imu_link
 odom_topic: /lio_sam/mapping/odometry
